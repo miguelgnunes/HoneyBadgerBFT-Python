@@ -7,11 +7,12 @@ services:
       dockerfile: Dockerfile
     volumes:
       - .:/usr/local/src/HoneyBadgerBFT
-    command: pytest -v --cov=honeybadgerbft
+#    command: pytest -v --cov=honeybadgerbft
+#    command: sh start.sh
   builddocs:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: miguel_Dockerfile_base
     volumes:
       - .:/usr/local/src/HoneyBadgerBFT
     command: make -C docs html

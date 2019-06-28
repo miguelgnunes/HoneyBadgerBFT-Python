@@ -5,13 +5,13 @@ monkey.patch_all()
 
 from gevent.queue import *
 from gevent import Greenlet
-from ..honeybadgerbft.core.utils import bcolors, mylog, initiateThresholdSig
-from ..honeybadgerbft.core.includeTransaction import honestParty
-from ..honeybadgerbft.core.bkr_acs import initBeforeBinaryConsensus
+from ..core.utils import bcolors, mylog, initiateThresholdSig
+from ..core.includeTransaction import honestParty
+from ..core.bkr_acs import initBeforeBinaryConsensus
 import gevent
 import os
-from ..honeybadgerbft.core.utils import myRandom as random
-from ..honeybadgerbft.core.utils import ACSException, checkExceptionPerGreenlet, getSignatureCost, encodeTransaction, getKeys,  \
+from ..core.utils import myRandom as random
+from ..core.utils import ACSException, checkExceptionPerGreenlet, getSignatureCost, encodeTransaction, getKeys,  \
     deepEncode, deepDecode, randomTransaction, initiateECDSAKeys, initiateThresholdEnc, finishTransactionLeap
 
 import time
@@ -195,35 +195,25 @@ def exit():
         stats.save('profile.callgrind', type='callgrind')
 
 if __name__ == '__main__':
+    options = {
+        "ecdsaKeys": "",
+        "threshold-keys": "",
+        "hosts": "",
+        "proposeSize": "",
+        "nrParties": "",
+        "tolerance": "",
+        "transactions": ""
+    }
+
+    if not options.proposeSize:
+        options.proposeSize = int(math.ceil(options.nrParties * math.log(options.nrParties)))
+    if options.tx < 0:
+        options.transactions = options.proposeSize
+    client_test_freenet(options.nrParties, options.tolerance, options)
+
     # GreenletProfiler.set_clock_type('cpu')
     atexit.register(exit)
     if USE_PROFILE:
         GreenletProfiler.set_clock_type('cpu')
         GreenletProfiler.start()
-
-    from optparse import OptionParser
-    parser = OptionParser()
-    parser.add_option("-e", "--ecdsa-keys", dest="ecdsa",
-                      help="Location of ECDSA keys", metavar="KEYS")
-    parser.add_option("-k", "--threshold-keys", dest="threshold_keys",
-                      help="Location of threshold signature keys", metavar="KEYS")
-    parser.add_option("-c", "--threshold-enc", dest="threshold_encs",
-                      help="Location of threshold encryption keys", metavar="KEYS")
-    parser.add_option("-n", "--number", dest="n",
-                      help="Number of parties", metavar="N", type="int")
-    parser.add_option("-b", "--propose-size", dest="B",
-                      help="Number of transactions to propose", metavar="B", type="int")
-    parser.add_option("-t", "--tolerance", dest="t",
-                      help="Tolerance of adversaries", metavar="T", type="int")
-    parser.add_option("-x", "--transactions", dest="tx",
-                      help="Number of transactions proposed by each party", metavar="TX", type="int", default=-1)
-    (options, args) = parser.parse_args()
-    if (options.ecdsa and options.threshold_keys and options.threshold_encs and options.n and options.t):
-        if not options.B:
-            options.B = int(math.ceil(options.n * math.log(options.n)))
-        if options.tx < 0:
-            options.tx = options.B
-        client_test_freenet(options.n , options.t, options)
-    else:
-        parser.error('Please specify the arguments')
 

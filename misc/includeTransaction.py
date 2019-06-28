@@ -269,11 +269,13 @@ lock.put(1)
 
 @greenletFunction
 def honestParty(pid, N, t, controlChannel, broadcast, receive, send, B = -1):
+# def honestParty(pid, N, t, controlChannel, broadcast, receive, send, port, B = -1):
     # RequestChannel is called by the client and it is the client's duty to broadcast the tx it wants to include
     if B < 0:
         B = int(math.ceil(N * math.log(N)))
     transactionCache = []
     finishedTx = set()
+    sentTx = {}
     proposals = []
     receivedProposals = False
     commonSet = []
@@ -305,28 +307,29 @@ def honestParty(pid, N, t, controlChannel, broadcast, receive, send, B = -1):
     Greenlet(listener).start()
 
     while True:
-            op, msg = controlChannel.get()
-            if op == "IncludeTransaction":
-                if isinstance(msg, Transaction):
-                    # transactionCache.add(msg)
-                    transactionCache.append(msg)
-                elif isinstance(msg, set):
-                    for tx in msg:
-                        transactionCache.append(tx)
-                elif isinstance(msg, list):
-                    transactionCache.extend(msg)
-            elif op == "Halt":
-                break
-            elif op == "Msg":
-                broadcast(eval(msg))  # now the msg is something we mannually send
-            mylog("timestampB (%d, %lf)" % (pid, time.time()), verboseLevel=-2)
-            if len(transactionCache) < B:  # Let's wait for many transactions. : )
-                time.sleep(0.5)
-                print "Not enough transactions", len(transactionCache)
-                continue
+            if len(transactionCache) < B/N:
+                op, msg = controlChannel.get()
+                if op == "IncludeTransaction":
+                    if isinstance(msg, Transaction):
+                        # transactionCache.add(msg)
+                        transactionCache.append(msg)
+                    elif isinstance(msg, set):
+                        for tx in msg:
+                            transactionCache.append(tx)
+                    elif isinstance(msg, list):
+                        transactionCache.extend(msg)
+                elif op == "Halt":
+                    break
+                elif op == "Msg":
+                    broadcast(eval(msg))  # now the msg is something we mannually send
+                mylog("timestampB (%d, %lf)" % (pid, time.time()), verboseLevel=-2)
+            # if len(transactionCache) < B:  # Let's wait for many transactions. : )
+            #     time.sleep(0.5)
+            #     print "Not enough transactions", len(transactionCache), "-", B
+            #     continue
 
             oldest_B = transactionCache[:B]
-            selected_B = random.sample(oldest_B, min(B/N, len(oldest_B)))
+            selected_B = random.sample([encodeMyTransaction(tr) for tr in oldest_B], min(B/N, len(oldest_B)))
             print "[%d] proposing %d transactions" % (pid, min(B/N, len(oldest_B)))
             aesKey = random._urandom(32)  #
             encrypted_B = encrypt(aesKey, ''.join(selected_B))
@@ -359,13 +362,41 @@ def honestParty(pid, N, t, controlChannel, broadcast, receive, send, B = -1):
             gevent.joinall(thList)
             mylog("timestampE (%d, %lf)" % (pid, time.time()), verboseLevel=-2)
             for rtx in recoveredSyncedTxList:
-                finishedTx.update(set(rtx))
+                finishedTx.update(set([decodeMyTransaction(tr) for tr in rtx]))
 
-            mylog("[%d] %d distinct tx synced and %d tx left in the pool." % (pid, len(finishedTx), len(transactionCache) - len(finishedTx)), verboseLevel=-2)
+            for transaction in finishedTx:
+                if transaction.trId not in sentTx:
+                    sentTx[transaction.trId] = transaction
+                    # send_envelope(socket, transaction.envelope)
+                    # mylog("Sent back envelope %s to BFTProxy" % transaction, verboseLevel=-2)
+
+            newTransactionCache = []
+            for tr in transactionCache:
+                if(tr.trId not in sentTx):
+                    newTransactionCache.append(tr)
+
+            transactionCache = newTransactionCache
+
+            mylog("[%d] %d distinct tx synced and %d tx left in the pool." % (pid, len(finishedTx), len(transactionCache)), verboseLevel=-2)
+            # mylog("[%d] %d distinct tx synced and %d tx left in the pool." % (pid, len(finishedTx), len(transactionCache) - len(finishedTx)), verboseLevel=-2)
+            mylog("[%d] Locking lock" % pid, verboseLevel=-2)
             lock.get()
+            mylog("[%d] Unlocked lock" % pid, verboseLevel=-2)
             finishcount += 1
             lock.put(1)
-            if finishcount >= N - t:  # convenient for local experiments
-                sys.exit()
+            # if finishcount >= N - t:  # convenient for local experiments
+            #     sys.exit()
     mylog("[%d] Now halting..." % (pid))
 
+
+def send_envelope(socket, env):
+    envelope = env.SerializeToString()
+    delimiter = _VarintBytes(len(envelope))
+    message = delimiter + envelope
+    msg_len = len(message)
+    total_sent = 0
+    while total_sent < msg_len:
+        sent = socket.send(message[total_sent:])
+        if sent == 0:
+            raise RuntimeError('Socket connection broken')
+        total_sent = total_sent + sent

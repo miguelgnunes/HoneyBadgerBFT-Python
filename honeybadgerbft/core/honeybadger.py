@@ -4,6 +4,9 @@ from enum import Enum
 import gevent
 from gevent.queue import Queue
 
+import random
+import time
+
 from honeybadgerbft.core.commoncoin import shared_coin
 from honeybadgerbft.core.binaryagreement import binaryagreement
 from honeybadgerbft.core.reliablebroadcast import reliablebroadcast
@@ -115,13 +118,27 @@ class HoneyBadgerBFT():
         self._recv_thread = gevent.spawn(_recv)
 
         while True:
+
+            if len(self.transaction_buffer) == 0:
+                time.sleep(0.5)
+                continue
             # For each round...
             r = self.round
             if r not in self._per_round_recv:
                 self._per_round_recv[r] = Queue()
 
             # Select all the transactions (TODO: actual random selection)
-            tx_to_send = self.transaction_buffer[:self.B]
+
+
+            # tx_to_send = self.transaction_buffer[:min(int(self.B/self.N), len(self.transaction_buffer))]
+            tx_to_send_list = self.transaction_buffer[:self.B]
+
+            sys_random = random.SystemRandom()
+            tx_to_send = sys_random.choice(tx_to_send_list)
+
+            print('Round %d:' % r)
+            print('%d transaction_buffer:' % self.pid, self.transaction_buffer)
+            print(self.pid, 'tx_to_send:', tx_to_send)
 
             # TODO: Wait a bit if transaction buffer is not full
 
@@ -132,15 +149,20 @@ class HoneyBadgerBFT():
                 return _send
             send_r = _make_send(r)
             recv_r = self._per_round_recv[r].get
-            new_tx = self._run_round(r, tx_to_send[0], send_r, recv_r)
-            print('new_tx:', new_tx)
+            new_tx = self._run_round(r, tx_to_send, send_r, recv_r)
+
+            new_tx = [tx.decode('UTF-8') for tx in new_tx]
+
+            print(self.pid, 'new_tx (from run_round):', new_tx)
 
             # Remove all of the new transactions from the buffer
-            self.transaction_buffer = [_tx for _tx in self.transaction_buffer if _tx not in new_tx]
+            self.transaction_buffer = [_tx for _tx in self.transaction_buffer if _tx not in [i for i in new_tx]]
+
+            print('%d transaction_buffer after removing new trs:' % self.pid, self.transaction_buffer)
 
             self.round += 1     # Increment the round
-            if self.round >= 3:
-                break   # Only run one round for now
+            # if self.round >= 3:
+            #     break   # Only run one round for now
 
     def _run_round(self, r, tx_to_send, send, recv):
         """Run one protocol round.

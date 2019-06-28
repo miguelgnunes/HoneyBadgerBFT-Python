@@ -1,5 +1,4 @@
 #!/usr/bin/python
-__author__ = 'aluex'
 from gevent import monkey
 monkey.patch_all()
 
@@ -74,7 +73,7 @@ def connect_to_channel(hostname, port, party):
             try:
                 s.sendall(struct.pack('<I', len(content)) + content)
             except SocketError:
-                print('!! [to %d] sending %d bytes' % (party, len(content))
+                print '!! [to %d] sending %d bytes' % (party, len(content))
 
     gtemp = Greenlet(_handle)
     gtemp.parent_args = (hostname, port, party)
@@ -203,10 +202,10 @@ def client_test_freenet(N, t, options):
     for i in iterList:
         _, port = IP_MAPPINGS[i]
         servers.append(listen_to_channel(port))
-    print('servers started')
+    print 'servers started'
 
     gevent.sleep(WAITING_SETUP_TIME_IN_SEC) # wait for set-up to be ready
-    print('sleep over')
+    print 'sleep over'
     if True:  # We only test for once
         initBeforeBinaryConsensus()
         ts = []
@@ -252,8 +251,8 @@ def client_test_freenet(N, t, options):
             except ACSException:
                 gevent.killall(ts)
             except finishTransactionLeap:  ### Manually jump to this level
-                print('msgCounter', msgCounter)
-                print('msgTypeCounter', msgTypeCounter)
+                print 'msgCounter', msgCounter
+                print 'msgTypeCounter', msgTypeCounter
                 # message id 0 (duplicated) for signatureCost
                 logChannel.put(StopIteration)
                 mylog("=====", verboseLevel=-1)
@@ -272,83 +271,33 @@ def client_test_freenet(N, t, options):
         time_now = time.time()
         delay = options.delaytime - time_now
         s.enter(delay, 1, toBeScheduled, ())
-        print(myID, "waits for", time_now + delay, 'now is', time_now)
+        print myID, "waits for", time_now + delay, 'now is', time_now
         s.run()
 
 
-import atexit
 
-USE_PROFILE = False
-GEVENT_DEBUG = False
-OUTPUT_HALF_MSG = False
 
-if USE_PROFILE:
-    import GreenletProfiler
-
-def exit():
-    print("Entering atexit()")
-    print('msgCounter', msgCounter)
-    print('msgTypeCounter', msgTypeCounter)
-    nums,lens = zip(*msgTypeCounter)
-    print('    Init      Echo      Val       Aux      Coin     Ready    Share')
-    print('%8d %8d %9d %9d %9d %9d %9d' % nums[1:])
-    print('%8d %8d %9d %9d %9d %9d %9d' % lens[1:])
-    mylog("Total Message size %d" % totalMessageSize, verboseLevel=-2)
-    if OUTPUT_HALF_MSG:
-        halfmsgCounter = 0
-        for msgindex in starting_time.keys():
-            if msgindex not in ending_time.keys():
-                logChannel.put((msgindex, msgSize[msgindex], msgFrom[msgindex],
-                    msgTo[msgindex], starting_time[msgindex], time.time(), '[UNRECEIVED]' + repr(msgContent[msgindex])))
-                halfmsgCounter += 1
-        mylog('%d extra log exported.' % halfmsgCounter, verboseLevel=-1)
-
-    if GEVENT_DEBUG:
-        checkExceptionPerGreenlet('gevent_debug')
-
-    if USE_PROFILE:
-        GreenletProfiler.stop()
-        stats = GreenletProfiler.get_func_stats()
-        stats.print_all()
-        stats.save('profile.callgrind', type='callgrind')
 
 if __name__ == '__main__':
+
+    options = {
+        "ecdsaKeys": "",
+        "threshold-keys": "",
+        "hosts": "",
+        "proposeSize": "",
+        "nrParties": "",
+        "tolerance": "",
+        "transactions": ""
+    }
+
+    if not options.proposeSize:
+        options.proposeSize = int(math.ceil(options.nrParties * math.log(options.nrParties)))
+    if options.tx < 0:
+        options.transactions = options.proposeSize
+    client_test_freenet(options.nrParties, options.tolerance, options)
+
     # GreenletProfiler.set_clock_type('cpu')
     atexit.register(exit)
     if USE_PROFILE:
         GreenletProfiler.set_clock_type('cpu')
         GreenletProfiler.start()
-
-    from optparse import OptionParser
-    parser = OptionParser()
-    parser.add_option("-e", "--ecdsa-keys", dest="ecdsa",
-                      help="Location of ECDSA keys", metavar="KEYS")
-    parser.add_option("-k", "--threshold-keys", dest="threshold_keys",
-                      help="Location of threshold signature keys", metavar="KEYS")
-    parser.add_option("-c", "--threshold-enc", dest="threshold_encs",
-                      help="Location of threshold encryption keys", metavar="KEYS")
-    parser.add_option("-s", "--hosts", dest="hosts",
-                      help="Host list file", metavar="HOSTS", default="~/hosts")
-    parser.add_option("-n", "--number", dest="n",
-                      help="Number of parties", metavar="N", type="int")
-    parser.add_option("-p", "--tx-path", dest="txpath",
-                      help="File path of the transaction set", metavar="FILE", default='tx')
-    parser.add_option("-a", "--negotiated-time", dest="delaytime",
-                      help="will start the protocol at some multiple of c", metavar="C", type="int", default=50)
-    parser.add_option("-b", "--propose-size", dest="B",
-                      help="Number of transactions to propose", metavar="B", type="int")
-    parser.add_option("-t", "--tolerance", dest="t",
-                      help="Tolerance of adversaries", metavar="T", type="int")
-    parser.add_option("-x", "--transactions", dest="tx",
-                      help="Number of transactions proposed by each party", metavar="TX", type="int", default=-1)
-    (options, args) = parser.parse_args()
-    prepareIPList(open(expanduser(options.hosts), 'r').read())
-    if (options.ecdsa and options.threshold_keys and options.threshold_encs and options.n and options.t):
-        if not options.B:
-            options.B = int(math.ceil(options.n * math.log(options.n)))
-        if options.tx < 0:
-            options.tx = options.B
-        client_test_freenet(options.n , options.t, options)
-    else:
-        parser.error('Please specify the arguments')
-

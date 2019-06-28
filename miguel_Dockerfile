@@ -1,0 +1,11 @@
+FROM honeybadgerbft-python-base
+
+ENV SRC /usr/local/src/HoneyBadgerBFT
+WORKDIR $SRC
+ADD . $SRC/
+
+RUN pip install --upgrade pip
+RUN pip install -e .[dev]
+
+COPY ./miguel_start.sh $SRC
+CMD sh miguel_start.sh

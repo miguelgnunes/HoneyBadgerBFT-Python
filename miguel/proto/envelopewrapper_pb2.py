@@ -20,8 +20,8 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='envelopewrapper.proto',
   package='proto',
   syntax='proto3',
-  serialized_options=_b('\n\020bft.miguel_2.proto'),
-  serialized_pb=_b('\n\x15\x65nvelopewrapper.proto\x12\x05proto\x1a\x0c\x63ommon.proto\"\xbe\x01\n\x0f\x45nvelopeWrapper\x12\x11\n\tchannelId\x18\x01 \x01(\t\x12\"\n\x08\x65nvelope\x18\x02 \x01(\x0b\x32\x10.common.Envelope\x12\x11\n\ttimestamp\x18\x03 \x01(\x03\x12\x39\n\x0c\x65nvelopeType\x18\x04 \x01(\x0e\x32#.proto.EnvelopeWrapper.EnvelopeType\"&\n\x0c\x45nvelopeType\x12\n\n\x06NORMAL\x10\x00\x12\n\n\x06\x43ONFIG\x10\x01\x42\x12\n\x10\x62\x66t.miguel_2.protob\x06proto3')
+  serialized_options=_b('\n\020bft.miguel.proto'),
+  serialized_pb=_b('\n\x15\x65nvelopewrapper.proto\x12\x05proto\x1a\x0c\x63ommon.proto\"\xbe\x01\n\x0f\x45nvelopeWrapper\x12\x11\n\tchannelId\x18\x01 \x01(\t\x12\"\n\x08\x65nvelope\x18\x02 \x01(\x0b\x32\x10.common.Envelope\x12\x11\n\ttimestamp\x18\x03 \x01(\x03\x12\x39\n\x0c\x65nvelopeType\x18\x04 \x01(\x0e\x32#.proto.EnvelopeWrapper.EnvelopeType\"&\n\x0c\x45nvelopeType\x12\n\n\x06NORMAL\x10\x00\x12\n\n\x06\x43ONFIG\x10\x01\x42\x12\n\x10\x62\x66t.miguel.protob\x06proto3')
   ,
   dependencies=[common__pb2.DESCRIPTOR,])
 

@@ -67,7 +67,7 @@ class HoneyBadgerBFT():
     :param recv:
     """
 
-    def __init__(self, sid, pid, B, N, f, sPK, sSK, ePK, eSK, send, recv):
+    def __init__(self, sid, pid, B, N, f, sPK, sSK, ePK, eSK, send, recv, final_tx_queue):
         self.sid = sid
         self.pid = pid
         self.B = B
@@ -80,6 +80,8 @@ class HoneyBadgerBFT():
         self._send = send
         self._recv = recv
 
+        self.final_tx_queue = final_tx_queue
+
         self.round = 0  # Current block number
         self.transaction_buffer = []
         self._per_round_recv = {}  # Buffer of incoming messages
@@ -89,7 +91,7 @@ class HoneyBadgerBFT():
 
         :param tx: Transaction to append to the buffer.
         """
-        print('submit_tx', self.pid, tx)
+        # print('submit_tx', self.pid, tx)
         self.transaction_buffer.append(tx)
 
     def run(self):
@@ -136,9 +138,9 @@ class HoneyBadgerBFT():
             sys_random = random.SystemRandom()
             tx_to_send = sys_random.choice(tx_to_send_list)
 
-            print('Round %d:' % r)
-            print('%d transaction_buffer:' % self.pid, self.transaction_buffer)
-            print(self.pid, 'tx_to_send:', tx_to_send)
+            # print('Round %d:' % r)
+            # print('%d transaction_buffer:' % self.pid, self.transaction_buffer)
+            # print(self.pid, 'tx_to_send:', tx_to_send)
 
             # TODO: Wait a bit if transaction buffer is not full
 
@@ -153,12 +155,17 @@ class HoneyBadgerBFT():
 
             new_tx = [tx.decode('UTF-8') for tx in new_tx]
 
-            print(self.pid, 'new_tx (from run_round):', new_tx)
+            # print(self.pid, 'new_tx (from run_round):', new_tx)
 
             # Remove all of the new transactions from the buffer
             self.transaction_buffer = [_tx for _tx in self.transaction_buffer if _tx not in [i for i in new_tx]]
 
-            print('%d transaction_buffer after removing new trs:' % self.pid, self.transaction_buffer)
+            # print("Agreed on the following transactions: " + ", ".join(new_tx))
+            # print("Sending them to HyperledgerSender")
+            self.final_tx_queue.put(new_tx)
+
+
+            # print('%d transaction_buffer after removing new trs:' % self.pid, self.transaction_buffer)
 
             self.round += 1     # Increment the round
             # if self.round >= 3:
@@ -196,7 +203,7 @@ class HoneyBadgerBFT():
         rbc_outputs = [Queue(1) for _ in range(N)]
 
         my_rbc_input = Queue(1)
-        print(pid, r, 'tx_to_send:', tx_to_send)
+        # print(pid, r, 'tx_to_send:', tx_to_send)
 
         def _setup(j):
             """Setup the sub protocols RBC, BA and common coin.

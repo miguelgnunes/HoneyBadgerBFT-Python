@@ -2,10 +2,12 @@ FROM honeybadgerbft-python-base
 
 ENV SRC /usr/local/src/HoneyBadgerBFT
 WORKDIR $SRC
-ADD . $SRC/
+ADD . .
 
 RUN pip install --upgrade pip
 RUN pip install -e .[dev]
 
-COPY ./miguel_start.sh $SRC
-CMD sh miguel_start.sh
+COPY ./miguel_start.sh .
+RUN chmod +x ./miguel_start.sh
+#CMD sh miguel_start.sh
+ENTRYPOINT ["./miguel_start.sh"]

@@ -15,7 +15,8 @@ from honeybadgerbft.crypto.threshsig.boldyreva import dealer
 from honeybadgerbft.crypto.threshenc import tpke
 from honeybadgerbft.core.honeybadger import BroadcastTag
 
-from google.protobuf.internal.decoder import _DecodeVarint as varint_decoder
+# from google.protobuf.internal.decoder import _DecodeVarint as varint_decoder
+from google.protobuf.internal.decoder import _DecodeVarint32 as varint_decoder
 from google.protobuf.internal import encoder
 
 import miguel.proto.envelopewrapper_pb2 as envelopewrapper
@@ -105,24 +106,6 @@ def _test_honeybadger(N=4, f=1, B=1, seed=None, port=5000):
     receiver_thread = gevent.spawn(hyperledger_receiver.run)
     sender_thread = gevent.spawn(hyperledger_sender.run)
 
-    # new_transactions = [Transaction(j, receive_envelope()) for j in range(3 * N)]
-
-    # for j in range(len(new_transactions)):
-    #     for i in range(N):
-    #         #if i == 1: continue
-    #         # badgers[i].submit_tx('<[HBBFT Input %d]>' % i)
-    #         badgers[i].submit_tx(str(j))
-
-    # for i in range(N):
-    #     badgers[i].submit_tx('<[HBBFT Input %d]>' % (i+10))
-    #
-    # for i in range(N):
-    #     badgers[i].submit_tx('<[HBBFT Input %d]>' % (i+20))
-
-    #gevent.killall(threads[N-f:])
-    #gevent.sleep(3)tx_to_send
-    #for i in range(N-f, N):
-    #    inputs[i].put(0)
     try:
         outs = [threads[i].get() for i in range(N)]
 
@@ -176,19 +159,9 @@ def test_broadcast_receiver_loop_raises(sender, tag, node_id, message, recv_queu
     assert all([q.empty() for queues in recv_queues_dict.values() for q in queues])
 
 
-def receive_envelope():
-    # dataToRead = struct.unpack("H", socket.read(2))[0]
-    # data = socket.read(dataToRead)
-    #
-    # env = envelopewrapper.EnvelopeWrapper()
-    # env.ParseFromString(data)
-    env = envelopewrapper.EnvelopeWrapper()
-    env.channelId = "two"
-    return env
-
 # HOST = "localhost"
 HOST = "host.docker.internal"
-TIME_OUT = 10
+TIME_OUT = 2
 transaction_dict = {}
 class HyperledgerReceiver():
 
@@ -203,48 +176,81 @@ class HyperledgerReceiver():
         while(True):
             new_tr = []
             start_time = time.time()
+            print("Waiting for " + str(self.B) + " envelopes...")
             for j in range(self.B):
                 if time.time() - start_time > TIME_OUT:
+                    print("Timed out. Sending " + str(len(new_tr)) + " transactions...")
                     break
                 env = self.receive_envelope()
+                if env is None:
+                    continue
                 new_tr.append(str(i))
                 transaction_dict[i] = env
                 i += 1
 
             if len(new_tr) > 0:
                 self.submit_tx_func(",".join(new_tr))
-            else:
-                time.sleep(2)
 
     def receive_envelope(self):
-        data_to_read = self.sock.recv(4)
+        try:
+            try:
+                data_to_read = self.sock.recv(10)
+            except socket.timeout as err:
+                print("Socket recv timed out")
+                raise
+        except Exception:
+            return None
 
-        (size, pos) = varint_decoder(data_to_read, 0)
 
-        # print("Receiving " + str(size) + " bytes")
-        data_to_read = data_to_read[pos:] + self.sock.recv(size - 4 + pos)
+        (size, init_pos) = varint_decoder(data_to_read, 0)
+        print("Receiving " + str(size) + " bytes. Init byte is in " + str(init_pos))
 
+        # data_to_read = data_to_read[pos:] + self.sock.recv(size - 4 + pos)
+
+
+        to_read = size - (len(data_to_read) - init_pos)
+        print("Received " + str(len(data_to_read)) + " from " + str(size) + " and to_read is " + str(to_read))
+        while to_read > 0:
+            try:
+                print("Reading " + str(to_read) + " bytes from socket...")
+                new_data = self.sock.recv(to_read)
+            except Exception as e:
+                print("Error with socket (second), continuing....")
+                print(e)
+                return None
+            data_to_read = data_to_read + new_data
+            to_read -= len(new_data)
+
+        print("Size of received envelope: " + str(len(data_to_read[init_pos:])))
         env = envelopewrapper.EnvelopeWrapper()
-        env.ParseFromString(data_to_read)
+        try:
+            env.ParseFromString(data_to_read[init_pos:])
+        except Exception as e:
+            print("Error parsing byte buffer ")
+            print(data_to_read[init_pos:])
+            print(e)
+            return None
 
         print("Received envelopeWrapper for channel " + env.channelId)
+        print(data_to_read[init_pos:])
 
-        time.sleep(int(abs(random.gauss(6, 5))))
-        # env = envelopewrapper.EnvelopeWrapper()
-        # env.channelId = "two"
+        # time.sleep(int(abs(random.gauss(6, 5))))
         return env
 
     def connect_socket(self):
-
+        print("Connecting to BftFabricProxy socket " + HOST + ":" + str(self.port) + "...")
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connected = False
         while not connected:
             try:
                 self.sock.connect((HOST, self.port))
                 connected = True
+                self.sock.settimeout(2)
             except Exception as e:
                 time.sleep(2)
                 pass
+
+        print("Connected.")
 
         return self.sock
 
@@ -319,7 +325,7 @@ if __name__ == '__main__':
     parser.add_option("-p", "--port", dest="p",
                       help="Hyperledger proxy connection port", metavar="P", type="int", default=5000)
 
-    parser.add_option("-i", "--ip", dest="h",
+    parser.add_option("-i", "--ip", dest="i",
                       help="Hyperledger proxy connection ip", metavar="I", type="string")
     (options, args) = parser.parse_args()
     if (options.n and options.f):
@@ -329,11 +335,10 @@ if __name__ == '__main__':
             options.tx = options.B
         if not options.p:
             options.p = 5000
-        if options.h:
-            HOST = options.h
+        if options.i:
+            HOST = options.i
 
         # connect_socket(options.p)
-        _test_honeybadger(int(options.n), int(options.f), int(options.B), int(options.p))
+        _test_honeybadger(int(options.n), int(options.f), int(options.B), None, options.p)
     else:
         parser.error('Please specify the arguments')
-

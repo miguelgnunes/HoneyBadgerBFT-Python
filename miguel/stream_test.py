@@ -9,7 +9,7 @@ from gevent.queue import Queue
 from pytest import fixture, mark, raises
 
 import honeybadgerbft.core.honeybadger
-#reload(honeybadgerbft.core.honeybadger)
+# reload(honeybadgerbft.core.honeybadger)
 from honeybadgerbft.core.honeybadger import HoneyBadgerBFT
 from honeybadgerbft.crypto.threshsig.boldyreva import dealer
 from honeybadgerbft.crypto.threshenc import tpke
@@ -25,6 +25,7 @@ from misc.utils import Transaction, encodeMyTransaction, decodeMyTransaction
 import time
 import socket
 
+
 @fixture
 def recv_queues(request):
     from honeybadgerbft.core.honeybadger import BroadcastReceiverQueues
@@ -32,7 +33,7 @@ def recv_queues(request):
     queues = {
         tag.value: [Queue() for _ in range(number_of_nodes)]
         for tag in BroadcastTag if tag != BroadcastTag.TPKE
-    }
+        }
     queues[BroadcastTag.TPKE.value] = Queue()
     return BroadcastReceiverQueues(**queues)
 
@@ -46,7 +47,7 @@ def simple_router(N, maxdelay=0.005, seed=None):
     :return: (receives, sends)
     """
     rnd = random.Random(seed)
-    #if seed is not None: print 'ROUTER SEED: %f' % (seed,)
+    # if seed is not None: print 'ROUTER SEED: %f' % (seed,)
 
     queues = [Queue() for _ in range(N)]
     _threads = []
@@ -54,33 +55,36 @@ def simple_router(N, maxdelay=0.005, seed=None):
     def makeSend(i):
         def _send(j, o):
             delay = rnd.random() * maxdelay
-            if not i%3:
+            if not i % 3:
                 delay *= 1000
-            #delay = 0.1
-            #print 'SEND   %8s [%2d -> %2d] %2.1f' % (o[0], i, j, delay*1000), o[1:]
-            gevent.spawn_later(delay, queues[j].put_nowait, (i,o))
+            # delay = 0.1
+            # print 'SEND   %8s [%2d -> %2d] %2.1f' % (o[0], i, j, delay*1000), o[1:]
+            gevent.spawn_later(delay, queues[j].put_nowait, (i, o))
+
         return _send
 
     def makeRecv(j):
         def _recv():
-            (i,o) = queues[j].get()
-            #print 'RECV %8s [%2d -> %2d]' % (o[0], i, j)
-            return (i,o)
+            (i, o) = queues[j].get()
+            # print 'RECV %8s [%2d -> %2d]' % (o[0], i, j)
+            return (i, o)
+
         return _recv
 
     return ([makeSend(i) for i in range(N)],
             [makeRecv(j) for j in range(N)])
 
+
 ### Test asynchronous common subset
 def _test_honeybadger(N=4, f=1, B=1, seed=None, port=5000):
     sid = 'sidA'
     # Generate threshold sig keys
-    sPK, sSKs = dealer(N, f+1, seed=seed)
+    sPK, sSKs = dealer(N, f + 1, seed=seed)
     # Generate threshold enc keys
-    ePK, eSKs = tpke.dealer(N, f+1)
+    ePK, eSKs = tpke.dealer(N, f + 1)
 
     rnd = random.Random(seed)
-    #print 'SEED:', seed
+    # print 'SEED:', seed
     router_seed = rnd.random()
     sends, recvs = simple_router(N, seed=router_seed)
 
@@ -98,13 +102,11 @@ def _test_honeybadger(N=4, f=1, B=1, seed=None, port=5000):
         for b in badgers:
             b.submit_tx(tx)
 
-    hyperledger_receiver = HyperledgerReceiver(port, B, submit_tx)
-    socket = hyperledger_receiver.connect_socket()
+    hyperledger_helper = HyperledgerHelper(port, B, submit_tx)
+    hyperledger_helper.connect_socket()
 
-    hyperledger_sender = HyperledgerSender(port, final_tx_queues[0], socket)
-
-    receiver_thread = gevent.spawn(hyperledger_receiver.run)
-    sender_thread = gevent.spawn(hyperledger_sender.run)
+    receiver_thread = gevent.spawn(hyperledger_helper.run_receiver)
+    sender_thread = gevent.spawn(hyperledger_helper.run_sender, final_tx_queues[0])
 
     try:
         outs = [threads[i].get() for i in range(N)]
@@ -119,7 +121,7 @@ def _test_honeybadger(N=4, f=1, B=1, seed=None, port=5000):
         raise
 
 
-#@mark.skip('python 3 problem with gevent')
+# @mark.skip('python 3 problem with gevent')
 def test_honeybadger():
     _test_honeybadger()
 
@@ -136,7 +138,7 @@ def test_broadcast_receiver_loop(sender, tag, node_id, message, recv_queues):
     recv_queue = getattr(recv_queues, tag)
     if tag != BroadcastTag.TPKE.value:
         recv_queue = recv_queue[node_id]
-    assert recv_queue,get() == (sender, message)
+    assert recv_queue, get() == (sender, message)
 
 
 @mark.parametrize('message', ('broadcast message',))
@@ -163,17 +165,18 @@ def test_broadcast_receiver_loop_raises(sender, tag, node_id, message, recv_queu
 HOST = "host.docker.internal"
 TIME_OUT = 2
 transaction_dict = {}
-class HyperledgerReceiver():
 
-    def __init__(self, port, B, submit_tx_func, socket = None):
+
+class HyperledgerHelper():
+    def __init__(self, port, B, submit_tx_func, socket=None):
         self.B = B
         self.port = port
         self.submit_tx_func = submit_tx_func
         self.sock = socket
 
-    def run(self):
+    def run_receiver(self):
         i = 0
-        while(True):
+        while (True):
             new_tr = []
             start_time = time.time()
             print("Waiting for " + str(self.B) + " envelopes...")
@@ -189,18 +192,66 @@ class HyperledgerReceiver():
                 i += 1
 
             if len(new_tr) > 0:
+                print("Submitting " + str(len(new_tr)) + " envelopes to honeybadger orderers")
                 self.submit_tx_func(",".join(new_tr))
 
+    def run_sender(self, queue):
+        while True:
+            envs = queue.get()
+            print("Fetching transactions " + ", ".join(envs))
+            new_envs_ids = []
+            for _envs in envs:
+                envelope_ids = _envs.split(",")
+                for id in envelope_ids:
+                    new_envs_ids.append(int(id))
+
+            new_envs_ids = list(dict.fromkeys(new_envs_ids))
+
+            new_envs = [transaction_dict[id] for id in new_envs_ids]
+            for env in new_envs:
+                self.send_envelope(env.SerializeToString())
+
     def receive_envelope(self):
+        sz = 0
+        sz = struct.unpack('i', self.sock.recv(4))[0]
+
+        data = []
+        while sz:
+            buf = self.sock.recv(sz)
+            if not buf:
+                raise ValueError("Buffer receive truncated")
+            data.append(buf)
+            sz -= len(buf)
+        envelope_bytes = b''.join(buf)
+        try:
+            env = envelopewrapper.EnvelopeWrapper()
+            env.ParseFromString(envelope_bytes)
+        except Exception as e:
+            print("Error parsing protobuf: " + str(e))
+            print(envelope_bytes)
+
+            return None
+
+        print("Received envelope successfully")
+        print(envelope_bytes)
+
+        return env
+
+    def receive_envelope_2(self):
         try:
             try:
-                data_to_read = self.sock.recv(10)
+                data_to_read = b''
+                new_data = b''
+                to_receive = 10
+                while to_receive > 0:
+                    new_data = new_data + self.sock.recv(to_receive)
+                    data_to_read = data_to_read + new_data
+                    to_receive -= len(new_data)
             except socket.timeout as err:
                 print("Socket recv timed out")
                 raise
         except Exception:
             return None
-
 
         (size, init_pos) = varint_decoder(data_to_read, 0)
         print("Receiving " + str(size) + " bytes. Init byte is in " + str(init_pos))
@@ -222,20 +273,48 @@ class HyperledgerReceiver():
             to_read -= len(new_data)
 
         print("Size of received envelope: " + str(len(data_to_read[init_pos:])))
+
         env = envelopewrapper.EnvelopeWrapper()
         try:
             env.ParseFromString(data_to_read[init_pos:])
         except Exception as e:
             print("Error parsing byte buffer ")
+            # print(bytes.fromhex(data_to_read[init_pos:]).decode("utf-8"))
             print(data_to_read[init_pos:])
             print(e)
+
+            # env = envelopewrapper.EnvelopeWrapper()
+            # size = len(data_to_read)
+            # try:
+            #     env.ParseFromString(data_to_read[init_pos:size-5])
+            # except Exception as e:
+            #     print("Error on second parsing: " + str(e))
+            #     print(data_to_read[init_pos:size-5])
+            #
+            # print("Second parsing actually worked")
+
             return None
 
         print("Received envelopeWrapper for channel " + env.channelId)
+        # print(bytes.fromhex(data_to_read[init_pos:]).decode("utf-8"))
         print(data_to_read[init_pos:])
 
         # time.sleep(int(abs(random.gauss(6, 5))))
         return env
+
+    def send_envelope(self, message):
+        print("Sending envelope...")
+        delimiter = encoder._VarintBytes(len(message))
+        message = delimiter + message
+        msg_len = len(message)
+        total_sent = 0
+        while total_sent < msg_len:
+            sent = self.sock.send(message[total_sent:])
+            if sent == 0:
+                raise RuntimeError('Socket connection broken')
+            total_sent = total_sent + sent
+
+        print("Envelope sent")
 
     def connect_socket(self):
         print("Connecting to BftFabricProxy socket " + HOST + ":" + str(self.port) + "...")
@@ -253,59 +332,6 @@ class HyperledgerReceiver():
         print("Connected.")
 
         return self.sock
-
-class HyperledgerSender():
-    sock = None
-
-    def __init__(self, port, queue, socket = None):
-        self.port = port
-        self.queue = queue
-        self.sock = socket
-
-    def connect_socket(self):
-
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        connected = False
-        while not connected:
-            try:
-                self.sock.connect((HOST, self.port))
-                connected = True
-            except Exception as e:
-                time.sleep(2)
-                pass
-
-        return self.sock
-
-    def run(self):
-        while True:
-            envs = self.queue.get()
-            print("Fetching transactions " + ", ".join(envs))
-            new_envs_ids = []
-            for _envs in envs:
-                envelope_ids = _envs.split(",")
-                for id in envelope_ids:
-                    new_envs_ids.append(int(id))
-
-            new_envs_ids = list(dict.fromkeys(new_envs_ids))
-
-            new_envs = [transaction_dict[id] for id in new_envs_ids]
-            for env in new_envs:
-                self.send_over_socket(env.SerializeToString())
-
-    def send_over_socket(self, message):
-        print("Sending envelope...")
-        delimiter = encoder._VarintBytes(len(message))
-        message = delimiter + message
-        msg_len = len(message)
-        total_sent = 0
-        while total_sent < msg_len:
-            sent = self.sock.send(message[total_sent:])
-            if sent == 0:
-                raise RuntimeError('Socket connection broken')
-            total_sent = total_sent + sent
-
-        print("Envelope sent")
-
 
 
 if __name__ == '__main__':

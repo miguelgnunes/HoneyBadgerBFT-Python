@@ -1,61 +1,29 @@
-# HoneyBadgerBFT
-The Honey Badger of BFT Protocols.
+## HoneybadgerBFT protocol as consensus algorithm for [BFT Fabric Ordering Service](https://github.com/miguelgnunes/fabric-orderingservice)
 
-<img width=200 src="http://i.imgur.com/wqzdYl4.png"/>
+This is a fork of the [HoneybadgerBFT protocol](https://github.com/initc3/HoneyBadgerBFT-Python) with a simple adaptation to work as the
+consensus layer of **BFT Fabric Ordering Service**. When starting up, this software creates a connection to a running *BFT Fabric Ordering Service Frontend*
+and awaits for transactions for ordering. As soon as each transaction is ordered, it returns it back to the Frontend. 
 
-[![Travis branch](https://img.shields.io/travis/initc3/HoneyBadgerBFT-Python/dev.svg)](https://travis-ci.org/initc3/HoneyBadgerBFT-Python)
-[![Codecov branch](https://img.shields.io/codecov/c/github/initc3/honeybadgerbft-python/dev.svg)](https://codecov.io/github/initc3/honeybadgerbft-python?branch=dev)
+###How to run it
 
-HoneyBadgerBFT is a leaderless and completely asynchronous BFT consensus protocols.
-This makes it a good fit for blockchains deployed over wide area networks
-or when adversarial conditions are expected.
-HoneyBadger nodes can even stay hidden behind anonymizing relays like Tor, and
-the purely-asynchronous protocol will make progress at whatever rate the
-network supports.
+We have created our setup with Docker for easy deployment. After starting up the [*BFT Fabric Ordering Service Frontend*](https://github.com/miguelgnunes/fabric-orderingservice)
+follow the below instructions:
 
-This repository contains a Python implementation of the HoneyBadgerBFT protocol.
-It is still a prototype, and is not approved for production use. It is intended
-to serve as a useful reference and alternative implementations for other projects.
+1. From the project base folder, Run:
+```bash
+$ docker build -t honeybadgerbft-python-base -f ./miguel_Dockerfile_base .
+$ docker build -t honeybadgerbft-python -f ./miguel_Dockerfile
+```
 
-## Development Activities
+The first command will build a base image with HoneybadgerBFT base code as well as set the default algorithm parameters as environment variables.
+The second command will build the image we will actually use to run the algorithm, which uses the first built image as base.
 
-Since its initial implementation, the project has gone through a substantial
-refactoring, and is currently under active development.
+2. Run:
+```bash
+$ docker run -e N="4" -e f="1" -e B="16" -e i="bft.frontend.1000" -e p="5001" -it --network="bftchannel" honeybadgerbft-python
+```
 
-At the moment, the following three milestones are being focused on:
-
-* [Bounded Badger](https://github.com/initc3/HoneyBadgerBFT-Python/milestone/3)
-* [Test Network](https://github.com/initc3/HoneyBadgerBFT-Python/milestone/2<Paste>)
-* [Release 1.0](https://github.com/initc3/HoneyBadgerBFT-Python/milestone/1)
-
-A roadmap of the project can be found in [ROADMAP.rst](./ROADMAP.rst).
-
-
-### Contributing
-Contributions are welcomed! To quickly get setup for development:
-
-1. Fork the repository and clone your fork. (See the Github Guide
-   [Forking Projects](https://guides.github.com/activities/forking/) if
-   needed.)
-
-2. Install [`Docker`](https://docs.docker.com/install/). (For Linux, see
-   [Manage Docker as a non-root user](https://docs.docker.com/install/linux/linux-postinstall/#manage-docker-as-a-non-root-user)
-   to run `docker` without `sudo`.)
-
-3. Install [`docker-compose`](https://docs.docker.com/compose/install/).
-
-4. Run the tests (the first time will take longer as the image will be built):
-
-   ```bash
-   $ docker-compose run --rm honeybadger
-   ```
-
-   The tests should pass, and you should also see a small code coverage report
-   output to the terminal.
-
-If the above went all well, you should be setup for developing
-**HoneyBadgerBFT-Python**!
-
-## License
-This is released under the CRAPL academic license. See ./CRAPL-LICENSE.txt
-Other licenses may be issued at the authors' discretion.
+This will run a local cluster of Honeybadger instances. ***N*** is the number of nodes, ***f*** is the max number of byzantine nodes,
+***B*** is the batch size, ***i*** is the hostname of the [BFT Fabric Frontend](https://github.com/miguelgnunes/fabric-orderingservice)
+and ***p*** is the port where host ***i*** is listening for connections. The parameters set for Frontend host and port are 
+suited to the example parameters as set in the example tutorial for [*BFT Fabric Order Service Frontend*](https://github.com/miguelgnunes/fabric-orderingservice).

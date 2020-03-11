@@ -24,6 +24,6 @@ $ docker run -e N="4" -e f="1" -e B="16" -e i="bft.frontend.1000" -e p="5001" -i
 ```
 
 This will run a local cluster of Honeybadger instances. ***N*** is the number of nodes, ***f*** is the max number of byzantine nodes,
-***B*** is the batch size, ***i*** is the hostname of the [BFT Fabric Frontend](https://github.com/miguelgnunes/fabric-orderingservice)
+***B*** is the batch size, ***i*** is the hostname of the [BFT Fabric Ordering Service Frontend](https://github.com/miguelgnunes/fabric-orderingservice)
 and ***p*** is the port where host ***i*** is listening for connections. The parameters set for Frontend host and port are 
-suited to the example parameters as set in the example tutorial for [*BFT Fabric Order Service Frontend*](https://github.com/miguelgnunes/fabric-orderingservice).
+suited to the example parameters as set in the example tutorial for [*BFT Fabric Ordering Service Frontend*](https://github.com/miguelgnunes/fabric-orderingservice).

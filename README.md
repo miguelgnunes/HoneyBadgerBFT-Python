@@ -4,7 +4,7 @@ This is a fork of the [HoneybadgerBFT protocol](https://github.com/initc3/HoneyB
 consensus layer of **BFT Fabric Ordering Service**. When starting up, this software creates a connection to a running *BFT Fabric Ordering Service Frontend*
 and awaits for transactions for ordering. As soon as each transaction is ordered, it returns it back to the Frontend. 
 
-###How to run it
+### How to run it
 
 We have created our setup with Docker for easy deployment. After starting up the [*BFT Fabric Ordering Service Frontend*](https://github.com/miguelgnunes/fabric-orderingservice)
 follow the below instructions:

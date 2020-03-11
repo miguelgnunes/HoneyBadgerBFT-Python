@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - .:/usr/local/src/HoneyBadgerBFT
-#    command: pytest -v --cov=honeybadgerbft
+#    command: pytest -v --cov=honeybadgerbro  ft
 #    command: sh start.sh
   builddocs:
     build:

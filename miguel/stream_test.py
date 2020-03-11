@@ -103,10 +103,15 @@ def _test_honeybadger(N=4, f=1, B=1, seed=None, port=5000):
             b.submit_tx(tx)
 
     hyperledger_helper = HyperledgerHelper(port, B, submit_tx)
-    hyperledger_helper.connect_socket()
+    socket = hyperledger_helper.connect_socket()
+
+    hyperledger_sender = HyperledgerSender(port, final_tx_queues[0], socket)
 
     receiver_thread = gevent.spawn(hyperledger_helper.run_receiver)
-    sender_thread = gevent.spawn(hyperledger_helper.run_sender, final_tx_queues[0])
+    sender_thread = gevent.spawn(hyperledger_sender.run)
+
+    # receiver_thread = gevent.spawn(hyperledger_helper.run_receiver)
+    # sender_thread = gevent.spawn(hyperledger_helper.run_sender, final_tx_queues[0])
 
     try:
         outs = [threads[i].get() for i in range(N)]
@@ -163,7 +168,7 @@ def test_broadcast_receiver_loop_raises(sender, tag, node_id, message, recv_queu
 
 # HOST = "localhost"
 HOST = "host.docker.internal"
-TIME_OUT = 2
+TIME_OUT = 5
 transaction_dict = {}
 
 
@@ -191,6 +196,7 @@ class HyperledgerHelper():
                 transaction_dict[i] = env
                 i += 1
 
+
             if len(new_tr) > 0:
                 print("Submitting " + str(len(new_tr)) + " envelopes to honeybadger orderers")
                 self.submit_tx_func(",".join(new_tr))
@@ -212,17 +218,38 @@ class HyperledgerHelper():
                 self.send_envelope(env.SerializeToString())
 
     def receive_envelope(self):
-        sz = 0
-        sz = struct.unpack('i', self.sock.recv(4))[0]
+        try:
+            left = 4
+            size = b''
+            size = size + self.sock.recv(left)
+            left -= len(size)
+        except socket.timeout as err:
+            print("Socket recv timed out")
+            return None
+
+        while left > 0:
+            rec = self.sock.recv(left)
+            size = size + rec
+            left -= len(rec)
+
+        print(str(size))
+
+        print("Size of sz: %d" % len(size))
+        sz = struct.unpack('>i', size)[0]
+        print("Size of message: %d" % sz)
 
         data = []
-        while sz:
+        while sz > 0:
+            print("Fetching %d from sock..." % sz)
             buf = self.sock.recv(sz)
             if not buf:
                 raise ValueError("Buffer receive truncated")
             data.append(buf)
             sz -= len(buf)
-        envelope_bytes = b''.join(buf)
+        envelope_bytes = b''.join(data)
+        print("Fetched %d from buffer" % len(envelope_bytes))
+
+
         try:
             env = envelopewrapper.EnvelopeWrapper()
             env.ParseFromString(envelope_bytes)
@@ -332,6 +359,48 @@ class HyperledgerHelper():
         print("Connected.")
 
         return self.sock
+
+
+class HyperledgerSender():
+    sock = None
+
+    def __init__(self, port, queue, socket = None):
+        self.port = port
+        self.queue = queue
+        self.sock = socket
+
+
+    def run(self):
+        while True:
+            envs = self.queue.get()
+            print("Fetching transactions " + ", ".join(envs))
+            new_envs_ids = []
+            for _envs in envs:
+                envelope_ids = _envs.split(",")
+                for id in envelope_ids:
+                    new_envs_ids.append(int(id))
+
+            new_envs_ids = list(dict.fromkeys(new_envs_ids))
+
+            new_envs = [transaction_dict[id] for id in new_envs_ids]
+            for env in new_envs:
+                self.send_over_socket(env.SerializeToString())
+
+    def send_over_socket(self, message):
+        print("Sending envelope...")
+        delimiter = encoder._VarintBytes(len(message))
+        message = delimiter + message
+        msg_len = len(message)
+        total_sent = 0
+        while total_sent < msg_len:
+            sent = self.sock.send(message[total_sent:])
+            if sent == 0:
+                raise RuntimeError('Socket connection broken')
+            total_sent = total_sent + sent
+
+        print("Envelope sent")
+
+
 
 
 if __name__ == '__main__':
